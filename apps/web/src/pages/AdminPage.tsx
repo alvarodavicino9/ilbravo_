@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type AdminBooking } from "../lib/api";
 import { Logo } from "../components/Logo";
+import { BackgroundFX } from "../components/BackgroundFX";
+import { Button } from "../components/ui/Button";
 
 const TOKEN_KEY = "il-bravo-admin-token";
 const currency = new Intl.NumberFormat("es-AR");
@@ -72,13 +74,14 @@ export function AdminPage() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-ink px-5">
+      <div className="relative flex min-h-screen items-center justify-center px-5">
+        <BackgroundFX />
         <form
           onSubmit={(e) => {
             e.preventDefault();
             load(tokenInput.trim());
           }}
-          className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] p-8"
+          className="glass w-full max-w-sm rounded-2xl p-8"
         >
           <Logo className="mb-6" />
           <h1 className="font-display text-2xl text-paper">Panel del local</h1>
@@ -87,46 +90,42 @@ export function AdminPage() {
             type="password"
             value={tokenInput}
             onChange={(e) => setTokenInput(e.target.value)}
-            className="mt-6 w-full rounded-xl border border-white/15 bg-ink px-4 py-3 text-paper outline-none focus:border-gold"
+            className="mt-6 w-full rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-paper outline-none focus:border-gold"
             placeholder="Token"
             autoFocus
           />
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
-          <button className="mt-6 w-full rounded-full bg-gold py-3 font-semibold text-ink hover:bg-gold-soft">
+          <Button type="submit" className="mt-6 w-full">
             Entrar
-          </button>
+          </Button>
         </form>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-ink px-5 py-10 text-paper">
+    <div className="relative min-h-screen px-5 py-10 text-paper">
+      <BackgroundFX />
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Logo />
           <div className="flex gap-3">
-            <button
-              onClick={handleExport}
-              className="rounded-full border border-white/20 px-5 py-2 text-sm hover:border-gold hover:text-gold"
-            >
+            <Button variant="outline" size="sm" onClick={handleExport}>
               ⬇ Exportar Excel
-            </button>
-            <button
-              onClick={handleSync}
-              className="rounded-full border border-white/20 px-5 py-2 text-sm hover:border-gold hover:text-gold"
-            >
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSync}>
               ⟳ Sincronizar Google Sheets
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
               onClick={() => {
                 sessionStorage.removeItem(TOKEN_KEY);
                 setToken("");
               }}
-              className="rounded-full border border-white/20 px-5 py-2 text-sm hover:border-red-400 hover:text-red-400"
             >
               Salir
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -139,7 +138,7 @@ export function AdminPage() {
         {!loading && bookings.length === 0 && <p className="mt-6 text-paper/50">No hay turnos próximos.</p>}
 
         {!loading && bookings.length > 0 && (
-          <div className="mt-6 overflow-x-auto rounded-2xl border border-white/10">
+          <div className="glass mt-6 overflow-x-auto rounded-2xl">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="bg-white/5 text-paper/60">
                 <tr>

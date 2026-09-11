@@ -1,0 +1,37 @@
+[
+  {
+    "id": "corte-clasico",
+    "name": "Corte clásico",
+    "priceArs": 8000,
+    "durationMinutes": 30,
+    "active": true
+  },
+  {
+    "id": "corte-barba",
+    "name": "Corte + Barba",
+    "priceArs": 12000,
+    "durationMinutes": 45,
+    "active": true
+  },
+  {
+    "id": "barba",
+    "name": "Perfilado de barba",
+    "priceArs": 5000,
+    "durationMinutes": 20,
+    "active": true
+  },
+  {
+    "id": "color",
+    "name": "Color / Platinado",
+    "priceArs": 18000,
+    "durationMinutes": 60,
+    "active": true
+  },
+  {
+    "id": "corte-nino",
+    "name": "Corte niños",
+    "priceArs": 6000,
+    "durationMinutes": 30,
+    "active": true
+  }
+]

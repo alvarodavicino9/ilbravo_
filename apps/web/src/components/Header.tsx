@@ -1,39 +1,53 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
-import type { BusinessInfo } from "../lib/api";
+import { useActiveSection, useScrolled } from "../lib/hooks";
 
 const LINKS = [
-  { href: "#servicios", label: "Servicios" },
-  { href: "#reservar", label: "Reservar" },
-  { href: "#ubicacion", label: "Ubicación" },
+  { href: "#servicios", id: "servicios", label: "Servicios" },
+  { href: "#reservar", id: "reservar", label: "Reservar" },
+  { href: "#nosotros", id: "nosotros", label: "Nosotros" },
+  { href: "#ubicacion", id: "ubicacion", label: "Ubicación" },
 ];
 
-export function Header({ business }: { business: BusinessInfo | null }) {
+export function Header() {
   const [open, setOpen] = useState(false);
+  const scrolled = useScrolled(12);
+  const active = useActiveSection(LINKS.map((l) => l.id));
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-ink/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
+    <header
+      className={`sticky top-0 z-40 transition-all duration-300 ${
+        scrolled
+          ? "glass border-b border-white/10 py-3 shadow-[0_10px_40px_-20px_rgba(0,0,0,0.8)]"
+          : "border-b border-transparent bg-transparent py-5"
+      }`}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-5">
         <a href="#inicio" onClick={() => setOpen(false)}>
           <Logo />
         </a>
 
         <nav className="hidden items-center gap-8 md:flex">
           {LINKS.map((l) => (
-            <a key={l.href} href={l.href} className="text-sm text-paper/80 transition hover:text-gold">
+            <a
+              key={l.href}
+              href={l.href}
+              className={`relative text-sm transition ${
+                active === l.id ? "text-gold" : "text-paper/75 hover:text-paper"
+              }`}
+            >
               {l.label}
+              {active === l.id && (
+                <motion.span
+                  layoutId="nav-underline"
+                  className="absolute -bottom-1.5 left-0 right-0 h-px bg-gold"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
             </a>
           ))}
-          {business && (
-            <a
-              href={`https://wa.me/${business.whatsappNumber}`}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full bg-gold px-5 py-2 text-sm font-semibold text-ink transition hover:bg-gold-soft"
-            >
-              Escribir por WhatsApp
-            </a>
-          )}
         </nav>
 
         <button
@@ -41,42 +55,34 @@ export function Header({ business }: { business: BusinessInfo | null }) {
           onClick={() => setOpen((v) => !v)}
           aria-label="Abrir menú"
         >
-          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
-            {open ? (
-              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-            ) : (
-              <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-            )}
-          </svg>
+          {open ? <X className="h-7 w-7" /> : <Menu className="h-7 w-7" />}
         </button>
       </div>
 
-      {open && (
-        <div className="border-t border-white/10 px-5 pb-5 md:hidden">
-          <div className="flex flex-col gap-4 pt-4">
-            {LINKS.map((l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                onClick={() => setOpen(false)}
-                className="text-paper/80 hover:text-gold"
-              >
-                {l.label}
-              </a>
-            ))}
-            {business && (
-              <a
-                href={`https://wa.me/${business.whatsappNumber}`}
-                target="_blank"
-                rel="noreferrer"
-                className="w-fit rounded-full bg-gold px-5 py-2 text-sm font-semibold text-ink"
-              >
-                Escribir por WhatsApp
-              </a>
-            )}
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="popover overflow-hidden border-t border-white/10 md:hidden"
+          >
+            <div className="flex flex-col gap-4 px-5 pb-6 pt-5">
+              {LINKS.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className={active === l.id ? "text-gold" : "text-paper/80 hover:text-gold"}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

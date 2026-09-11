@@ -5,11 +5,19 @@
   --font-display: "Bebas Neue", "Inter", sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
 
-  --color-ink: #0a0a0a;
-  --color-ink-soft: #151515;
+  --color-ink: #08070a;
+  --color-ink-soft: #121116;
   --color-paper: #f8f7f4;
   --color-gold: #c9a24b;
   --color-gold-soft: #e4cd8f;
+  --color-gold-dim: #7a6636;
+  --color-ember: #b3552f;
+  --color-ember-soft: #d97b4f;
+
+  /* Colores clásicos del poste de barbería (rojo / blanco / azul) */
+  --pole-red: #c23b3b;
+  --pole-white: #f2efe8;
+  --pole-blue: #2c4a7c;
 }
 
 html {
@@ -21,9 +29,223 @@ body {
   background: var(--color-ink);
   color: var(--color-paper);
   font-family: var(--font-sans);
+  overflow-x: hidden;
 }
 
 ::selection {
   background: var(--color-gold);
   color: var(--color-ink);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ink);
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold-dim);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+/* Textura de grano sutil, sensación editorial/premium */
+.grain {
+  position: relative;
+}
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(37, 211, 102, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+  }
+}
+
+/* ---------- Glassmorphism card ---------- */
+.glass {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ---------- Solid overlay panel (dropdowns, popovers, menus) ----------
+   Unlike .glass, this needs to fully hide whatever sits behind it —
+   used for floating panels that open on top of live page content. */
+.popover {
+  background: linear-gradient(165deg, rgba(23, 21, 26, 0.99), rgba(11, 10, 13, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Animated gradient ring that fades in on hover, used on premium cards */
+.glow-ring {
+  position: relative;
+  isolation: isolate;
+}
+.glow-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--glow-angle, 0deg),
+    transparent 0%,
+    var(--color-gold) 12%,
+    transparent 28%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  animation: glow-rotate 3.2s linear infinite;
+  z-index: -1;
+}
+.glow-ring:hover::before {
+  opacity: 1;
+}
+@keyframes glow-rotate {
+  to {
+    --glow-angle: 360deg;
+  }
+}
+@property --glow-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ---------- Buttons: shimmer sweep on hover ---------- */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -75%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.btn-shine:hover::after {
+  left: 130%;
+}
+
+/* ---------- Barber pole (rotating diagonal stripes) ----------
+   Back to the classic steep barbershop-pole angle and tight 9px bands
+   (real repeating-linear-gradient, so the stripes are genuinely
+   continuous — no chopped/tiled look). The seam we used to get on
+   loop restart came from the browser re-tiling the *whole element box*
+   (its default background-size) as an extra, unrelated outer repeat
+   unit — since the element's own height is never an exact multiple of
+   the 27px stripe cycle, that outer tiling didn't line up with itself
+   once shifted.
+   Fix: size the background explicitly to one vertical stripe-cycle
+   (45px — chosen so that, projected onto the gradient's own 126.87deg
+   axis, it equals exactly one 27px color cycle) and repeat only on
+   that axis (`repeat-y`; width stays 100% so there's never more than
+   one column). Animating only `background-position-y` by that same
+   45px is then an exact loop: verified pixel-for-pixel identical
+   (mean/max diff 0) between the 0px and 45px frames. This also matches
+   how a real pole reads — stripes travelling straight down. */
+.barber-pole {
+  background-image: repeating-linear-gradient(
+    126.87deg,
+    var(--pole-red) 0px,
+    var(--pole-red) 9px,
+    var(--pole-white) 9px,
+    var(--pole-white) 18px,
+    var(--pole-blue) 18px,
+    var(--pole-blue) 27px
+  );
+  background-size: 100% 45px;
+  background-repeat: repeat-y;
+  animation: barber-spin 1.1s linear infinite;
+}
+@keyframes barber-spin {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 45px;
+  }
+}
+
+/* ---------- Slow ambient rotation, used for the logo watermark ---------- */
+.animate-spin-slow {
+  animation: spin-slow 50s linear infinite;
+}
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Ambient floating flecks in the hero ---------- */
+.particle {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--color-gold-soft);
+  opacity: 0;
+  animation: particle-float linear infinite;
+}
+@keyframes particle-float {
+  0% {
+    transform: translate3d(0, 12px, 0) scale(0.6);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  88% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate3d(var(--drift, 24px), -220px, 0) scale(1);
+    opacity: 0;
+  }
+}
+
+/* ---------- Count-up stat number tick ---------- */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
