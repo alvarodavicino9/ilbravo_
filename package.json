@@ -1,0 +1,17 @@
+{
+  "name": "il-bravo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Sistema integral para IL BRAVO Peluqueria & Barberia: web de reservas, API, agenda sincronizada y asistente de WhatsApp.",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "apps/whatsapp-bot"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:bot": "npm run dev --workspace=apps/whatsapp-bot",
+    "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/web && npm run build --workspace=apps/whatsapp-bot"
+  }
+}

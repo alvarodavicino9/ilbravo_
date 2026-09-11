@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.local
+
+# API
+apps/api/data/
+
+# WhatsApp bot session (nunca subir, es la sesión de WhatsApp real)
+apps/whatsapp-bot/auth/
+
+# Editor / OS
+.DS_Store
+.vscode/
