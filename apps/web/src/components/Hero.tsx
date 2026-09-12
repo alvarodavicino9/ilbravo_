@@ -39,9 +39,9 @@ export function Hero({ business }: { business: BusinessInfo | null }) {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.9, ease: "easeOut" }}
-          className="absolute right-[6%] top-1/2 hidden -translate-y-1/2 sm:block"
+          className="absolute right-4 top-20 sm:right-[6%] sm:top-1/2 sm:-translate-y-1/2"
         >
-          <BarberPole className="h-64 w-9 sm:h-72 sm:w-10 md:h-[26rem] md:w-14 lg:h-[30rem] lg:w-16" />
+          <BarberPole className="h-28 w-5 sm:h-72 sm:w-10 md:h-[26rem] md:w-14 lg:h-[30rem] lg:w-16" />
         </motion.div>
       </div>
 
