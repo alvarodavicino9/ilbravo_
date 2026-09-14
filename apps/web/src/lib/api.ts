@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+import { supabase } from "./supabase";
 
 export interface Service {
   id: string;
@@ -72,53 +72,285 @@ export interface AdminBooking {
 
 class ApiError extends Error {}
 
-async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new ApiError((body as any).error || `Error ${res.status}`);
+const WEEKDAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const SLOT_STEP_MINUTES = 15;
+
+/** Mensajes amigables para las excepciones que levantan las funciones
+ * RPC en Postgres (ver migración initial_schema en Supabase). */
+const RPC_ERROR_MESSAGES: Record<string, string> = {
+  SERVICE_NOT_FOUND: "Servicio no encontrado",
+  PAST_TIME: "Ese horario ya pasó",
+  SLOT_TAKEN: "Ese horario ya no está disponible, elegí otro",
+  INVALID_NAME: "El nombre ingresado no es válido",
+  INVALID_PHONE: "El teléfono ingresado no es válido",
+  UNAUTHORIZED: "No autorizado",
+};
+
+function friendlyRpcError(err: { message?: string } | null): ApiError {
+  const raw = err?.message || "";
+  for (const code of Object.keys(RPC_ERROR_MESSAGES)) {
+    if (raw.includes(code)) return new ApiError(RPC_ERROR_MESSAGES[code]);
   }
-  return body as T;
+  return new ApiError(raw || "Error inesperado");
+}
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function toHHMM(mins: number): string {
+  const h = Math.floor(mins / 60).toString().padStart(2, "0");
+  const m = (mins % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+/** Parsea "YYYY-MM-DD" como fecha local (evita corrimientos por UTC). */
+function parseDateLocal(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function isPast(dateStr: string, timeStr?: string): boolean {
+  const now = new Date();
+  const d = parseDateLocal(dateStr);
+  if (timeStr) {
+    const [h, m] = timeStr.split(":").map(Number);
+    d.setHours(h, m, 0, 0);
+    return d.getTime() < now.getTime();
+  }
+  d.setHours(23, 59, 59, 999);
+  return d.getTime() < now.getTime();
+}
+
+// Recorta "HH:MM:SS" (formato time de Postgres) a "HH:MM".
+function hhmmss(t: string): string {
+  return t.slice(0, 5);
 }
 
 export const api = {
-  getBusiness: () => jsonFetch<BusinessInfo>("/api/business"),
-  getServices: () => jsonFetch<Service[]>("/api/services"),
-  getAvailability: (date: string, serviceId: string) =>
-    jsonFetch<AvailabilityResponse>(
-      `/api/availability?date=${encodeURIComponent(date)}&serviceId=${encodeURIComponent(serviceId)}`
-    ),
-  createBooking: (input: CreateBookingInput) =>
-    jsonFetch<BookingResult>("/api/bookings", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  adminListBookings: (token: string, params?: { from?: string; to?: string }) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return jsonFetch<AdminBooking[]>(`/api/bookings${qs ? `?${qs}` : ""}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  getBusiness: async (): Promise<BusinessInfo> => {
+    const [{ data: info, error: infoErr }, { data: hoursRows, error: hoursErr }] = await Promise.all([
+      supabase.from("business_info").select("*").eq("id", true).single(),
+      supabase.from("business_hours").select("*").order("weekday", { ascending: true }),
+    ]);
+    if (infoErr) throw new ApiError(infoErr.message);
+    if (hoursErr) throw new ApiError(hoursErr.message);
+
+    const hours: DayHours[] = (hoursRows ?? []).map((h) => ({
+      day: h.weekday,
+      dayName: WEEKDAY_NAMES[h.weekday],
+      hours: h.open_time && h.close_time ? { open: hhmmss(h.open_time), close: hhmmss(h.close_time) } : null,
+    }));
+
+    return {
+      name: info.name,
+      fullName: info.full_name,
+      category: info.category,
+      address: info.address,
+      addressShort: info.address_short,
+      mapsUrl: info.maps_url,
+      phoneDisplay: info.phone_display,
+      whatsappNumber: info.whatsapp_number,
+      instagram: info.instagram,
+      instagramHandle: info.instagram_handle,
+      hours,
+    };
   },
-  adminCancelBooking: (token: string, id: string) =>
-    jsonFetch<{ ok: boolean }>(`/api/bookings/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+
+  getServices: async (): Promise<Service[]> => {
+    const { data, error } = await supabase
+      .from("services")
+      .select("id, name, price_ars, duration_minutes")
+      .eq("active", true)
+      .order("name", { ascending: true });
+    if (error) throw new ApiError(error.message);
+    return (data ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      priceArs: s.price_ars,
+      durationMinutes: s.duration_minutes,
+    }));
+  },
+
+  getAvailability: async (date: string, serviceId: string): Promise<AvailabilityResponse> => {
+    const [{ data: hourRow, error: hourErr }, { data: service, error: serviceErr }] = await Promise.all([
+      supabase
+        .from("business_hours")
+        .select("open_time, close_time")
+        .eq("weekday", parseDateLocal(date).getDay())
+        .maybeSingle(),
+      supabase
+        .from("services")
+        .select("duration_minutes")
+        .eq("id", serviceId)
+        .eq("active", true)
+        .maybeSingle(),
+    ]);
+    if (hourErr) throw new ApiError(hourErr.message);
+    if (serviceErr) throw new ApiError(serviceErr.message);
+
+    const dayHours =
+      hourRow?.open_time && hourRow?.close_time
+        ? { open: hhmmss(hourRow.open_time), close: hhmmss(hourRow.close_time) }
+        : null;
+
+    if (!dayHours || !service) {
+      return { date, open: Boolean(dayHours), hours: dayHours, slots: [] };
+    }
+
+    const { data: busyRows, error: busyErr } = await supabase.rpc("get_busy_ranges", { p_date: date });
+    if (busyErr) throw new ApiError(busyErr.message);
+
+    const busyRanges: { start: number; end: number }[] = (busyRows ?? []).map(
+      (b: { start_time: string; end_time: string }) => ({
+        start: toMinutes(hhmmss(b.start_time)),
+        end: toMinutes(hhmmss(b.end_time)),
+      })
+    );
+
+    const openMin = toMinutes(dayHours.open);
+    const closeMin = toMinutes(dayHours.close);
+    const duration = service.duration_minutes;
+
+    const slots: string[] = [];
+    for (let start = openMin; start + duration <= closeMin; start += SLOT_STEP_MINUTES) {
+      const end = start + duration;
+      const overlaps = busyRanges.some((b) => start < b.end && end > b.start);
+      if (overlaps) continue;
+      const hhmm = toHHMM(start);
+      if (isPast(date, hhmm)) continue;
+      slots.push(hhmm);
+    }
+
+    return { date, open: true, hours: dayHours, slots };
+  },
+
+  createBooking: async (input: CreateBookingInput): Promise<BookingResult> => {
+    const { data, error } = await supabase
+      .rpc("create_booking", {
+        p_service_id: input.serviceId,
+        p_date: input.date,
+        p_start_time: input.startTime,
+        p_customer_name: input.customerName,
+        p_customer_phone: input.customerPhone,
+        p_source: input.source,
+        p_notes: null,
+      })
+      .single();
+    if (error) throw friendlyRpcError(error);
+
+    const row = data as {
+      id: string;
+      service_id: string;
+      service_name: string;
+      price_ars: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      customer_name: string;
+      customer_phone: string;
+      status: string;
+    };
+
+    return {
+      id: row.id,
+      serviceId: row.service_id,
+      serviceName: row.service_name,
+      priceArs: row.price_ars,
+      date: row.date,
+      startTime: hhmmss(row.start_time),
+      endTime: hhmmss(row.end_time),
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone,
+      status: row.status,
+    };
+  },
+
+  adminListBookings: async (token: string, params?: { from?: string; to?: string }): Promise<AdminBooking[]> => {
+    const { data, error } = await supabase.rpc("admin_list_bookings", {
+      p_token: token,
+      p_from: params?.from ?? null,
+      p_to: params?.to ?? null,
+    });
+    if (error) throw friendlyRpcError(error);
+
+    return (data ?? []).map(
+      (r: {
+        id: string;
+        date: string;
+        start_time: string;
+        end_time: string;
+        service_name: string;
+        price_ars: number;
+        customer_name: string;
+        customer_phone: string;
+        status: "confirmed" | "cancelled";
+        source: string;
+        created_at: string;
+      }) => ({
+        id: r.id,
+        date: r.date,
+        startTime: hhmmss(r.start_time),
+        endTime: hhmmss(r.end_time),
+        serviceName: r.service_name,
+        priceArs: r.price_ars,
+        customerName: r.customer_name,
+        customerPhone: r.customer_phone,
+        status: r.status,
+        source: r.source,
+        createdAt: r.created_at,
+      })
+    );
+  },
+
+  adminCancelBooking: async (token: string, id: string): Promise<{ ok: boolean }> => {
+    const { data, error } = await supabase.rpc("admin_cancel_booking", { p_token: token, p_id: id });
+    if (error) throw friendlyRpcError(error);
+    return { ok: Boolean(data) };
+  },
+
   adminExportExcel: async (token: string): Promise<Blob> => {
-    const res = await fetch(`${API_URL}/api/bookings/export/excel`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const rows = await api.adminListBookings(token);
+    const ExcelJS = await import("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "IL BRAVO - Sistema de turnos";
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet("Agenda");
+    sheet.columns = [
+      { header: "Fecha", key: "date", width: 12 },
+      { header: "Hora inicio", key: "startTime", width: 12 },
+      { header: "Hora fin", key: "endTime", width: 12 },
+      { header: "Servicio", key: "serviceName", width: 22 },
+      { header: "Precio (ARS)", key: "priceArs", width: 14 },
+      { header: "Cliente", key: "customerName", width: 24 },
+      { header: "Teléfono", key: "customerPhone", width: 16 },
+      { header: "Estado", key: "status", width: 14 },
+      { header: "Origen", key: "source", width: 12 },
+      { header: "Creado", key: "createdAt", width: 20 },
+    ];
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF111111" } };
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+    for (const r of rows) {
+      sheet.addRow({ ...r, status: r.status === "cancelled" ? "Cancelado" : "Confirmado" });
+    }
+    sheet.autoFilter = { from: "A1", to: "J1" };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    if (!res.ok) throw new ApiError("No se pudo exportar el Excel");
-    return res.blob();
   },
-  adminSyncSheet: (token: string) =>
-    jsonFetch<{ synced: boolean; rows?: number }>("/api/bookings/sync-sheet", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }),
+
+  // TODO: la sincronización con Google Sheets todavía no se portó a
+  // Supabase (queda pendiente, ver conversación con el cliente sobre el
+  // bot de WhatsApp). Por ahora el botón del panel avisa que no está
+  // configurada, igual que antes cuando faltaba la config en el server.
+  adminSyncSheet: async (_token: string): Promise<{ synced: boolean; rows?: number }> => {
+    return { synced: false };
+  },
 };
 
 export { ApiError };
