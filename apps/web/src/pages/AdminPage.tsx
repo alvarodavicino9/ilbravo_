@@ -5,6 +5,8 @@ import {
   CalendarDays,
   CalendarPlus,
   CalendarX,
+  CheckCircle2,
+  Circle,
   Download,
   DollarSign,
   Eye,
@@ -27,26 +29,17 @@ import {
   type PaymentMethod,
   type Service,
 } from "../lib/api";
+import { formatDMY, isoDaysFromNow, todayIso } from "../lib/date";
 import { Logo } from "../components/Logo";
 import { BackgroundFX } from "../components/BackgroundFX";
 import { Button } from "../components/ui/Button";
 import { Select } from "../components/ui/Select";
 import { StatCard } from "../components/admin/StatCard";
 import { StatusPill } from "../components/admin/StatusPill";
+import { RevenueChart } from "../components/admin/RevenueChart";
 
 const TOKEN_KEY = "il-bravo-admin-token";
 const currency = new Intl.NumberFormat("es-AR");
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isoDaysFromNow(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function formatHeaderDate(): string {
   const s = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric", month: "long" }).format(
@@ -98,7 +91,25 @@ function PaymentBadge({
   );
 }
 
-/** Modal para editar el medio de pago (y notas) de un turno existente. */
+/** Pastilla de estado de cobro; clickeable para marcar pagado/pendiente al instante. */
+function PaidPill({ paid, onClick, busy }: { paid: boolean; onClick: () => void; busy?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+        paid
+          ? "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+          : "border border-dashed border-white/15 text-paper/40 hover:border-emerald-400/40 hover:text-emerald-400"
+      }`}
+    >
+      {paid ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+      {paid ? "Pagado" : "Pendiente"}
+    </button>
+  );
+}
+
+/** Modal para editar el medio de pago, notas y estado de cobro de un turno existente. */
 function PaymentEditModal({
   booking,
   onClose,
@@ -106,10 +117,11 @@ function PaymentEditModal({
 }: {
   booking: AdminBooking;
   onClose: () => void;
-  onSaved: (id: string, changes: { paymentMethod: PaymentMethod | null; notes: string | null }) => void;
+  onSaved: (id: string, changes: { paymentMethod: PaymentMethod | null; notes: string | null; paid: boolean }) => void;
 }) {
   const [value, setValue] = useState<PaymentMethod | "">(booking.paymentMethod ?? "");
   const [notes, setNotes] = useState(booking.notes ?? "");
+  const [paid, setPaid] = useState(booking.paid);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,8 +132,9 @@ function PaymentEditModal({
       await api.adminUpdateBooking(sessionStorage.getItem(TOKEN_KEY) || "", booking.id, {
         paymentMethod: value || null,
         notes: notes.trim() || null,
+        paid,
       });
-      onSaved(booking.id, { paymentMethod: value || null, notes: notes.trim() || null });
+      onSaved(booking.id, { paymentMethod: value || null, notes: notes.trim() || null, paid });
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar");
@@ -133,7 +146,7 @@ function PaymentEditModal({
   return (
     <ModalShell onClose={onClose} title="Medio de pago" icon={<Wallet className="h-4 w-4" />}>
       <p className="text-sm text-paper/60">
-        {booking.customerName} · {booking.serviceName} · {booking.date} {booking.startTime}
+        {booking.customerName} · {booking.serviceName} · {formatDMY(booking.date)} {booking.startTime}
       </p>
 
       <div className="mt-5">
@@ -147,6 +160,20 @@ function PaymentEditModal({
           placeholder="Sin definir"
         />
       </div>
+
+      <button
+        type="button"
+        onClick={() => setPaid((v) => !v)}
+        className={`mt-4 flex w-full items-center gap-2.5 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+          paid ? "border-emerald-400/30 bg-emerald-400/5 text-emerald-400" : "border-white/15 text-paper/70"
+        }`}
+      >
+        {paid ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Circle className="h-4 w-4 shrink-0" />}
+        <span>
+          <span className="font-medium">{paid ? "Cobrado" : "Marcar como cobrado"}</span>
+          <span className="block text-xs opacity-70">Suma a los ingresos cuando está marcado.</span>
+        </span>
+      </button>
 
       <div className="mt-4">
         <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
@@ -197,6 +224,7 @@ function NewBookingModal({
   const [phone, setPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [notes, setNotes] = useState("");
+  const [paid, setPaid] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -222,6 +250,7 @@ function NewBookingModal({
         customerPhone: phone.trim(),
         paymentMethod: paymentMethod || null,
         notes: notes.trim() || null,
+        paid,
       });
       onCreated();
       onClose();
@@ -316,6 +345,20 @@ function NewBookingModal({
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setPaid((v) => !v)}
+        className={`mt-4 flex w-full items-center gap-2.5 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+          paid ? "border-emerald-400/30 bg-emerald-400/5 text-emerald-400" : "border-white/15 text-paper/70"
+        }`}
+      >
+        {paid ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Circle className="h-4 w-4 shrink-0" />}
+        <span>
+          <span className="font-medium">{paid ? "Se cobra ahora" : "Marcar como cobrado ahora"}</span>
+          <span className="block text-xs opacity-70">Para cuando el cliente paga en el momento.</span>
+        </span>
+      </button>
+
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-400/20 bg-red-400/5 px-3.5 py-3 text-sm text-red-400">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -395,6 +438,7 @@ export function AdminPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [editingPayment, setEditingPayment] = useState<AdminBooking | null>(null);
   const [showNewBooking, setShowNewBooking] = useState(false);
+  const [togglingPaidId, setTogglingPaidId] = useState<string | null>(null);
 
   async function load(currentToken: string) {
     setLoading(true);
@@ -446,15 +490,32 @@ export function AdminPage() {
     setBookings([]);
   }
 
-  function applyPaymentUpdate(id: string, changes: { paymentMethod: PaymentMethod | null; notes: string | null }) {
+  function applyPaymentUpdate(
+    id: string,
+    changes: { paymentMethod: PaymentMethod | null; notes: string | null; paid: boolean }
+  ) {
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...changes } : b)));
+  }
+
+  async function handleTogglePaid(b: AdminBooking) {
+    const next = !b.paid;
+    setTogglingPaidId(b.id);
+    setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, paid: next } : x)));
+    try {
+      await api.adminUpdateBooking(token, b.id, { paid: next });
+    } catch {
+      setBookings((prev) => prev.map((x) => (x.id === b.id ? { ...x, paid: !next } : x)));
+    } finally {
+      setTogglingPaidId(null);
+    }
   }
 
   const today = todayIso();
 
   const stats = useMemo(() => {
     const todayConfirmed = bookings.filter((b) => b.date === today && b.status === "confirmed");
-    const revenueToday = todayConfirmed.reduce((sum, b) => sum + b.priceArs, 0);
+    const revenueToday = todayConfirmed.filter((b) => b.paid).reduce((sum, b) => sum + b.priceArs, 0);
+    const pendingToday = todayConfirmed.filter((b) => !b.paid).reduce((sum, b) => sum + b.priceArs, 0);
 
     const in7 = isoDaysFromNow(7);
     const upcoming7Count = bookings.filter(
@@ -475,7 +536,7 @@ export function AdminPage() {
       }
     }
 
-    return { todayCount: todayConfirmed.length, revenueToday, upcoming7Count, topService, topCount };
+    return { todayCount: todayConfirmed.length, revenueToday, pendingToday, upcoming7Count, topService, topCount };
   }, [bookings, today]);
 
   const filtered = useMemo(() => {
@@ -593,8 +654,9 @@ export function AdminPage() {
           />
           <StatCard
             icon={<DollarSign className="h-4 w-4" />}
-            label="Ingresos hoy"
+            label="Cobrado hoy"
             value={`$${currency.format(stats.revenueToday)}`}
+            hint={stats.pendingToday > 0 ? `+ $${currency.format(stats.pendingToday)} pendiente` : undefined}
             delay={0.05}
           />
           <StatCard
@@ -610,6 +672,10 @@ export function AdminPage() {
             hint={stats.topCount > 0 ? `${stats.topCount} turnos` : undefined}
             delay={0.15}
           />
+        </div>
+
+        <div className="mt-6">
+          <RevenueChart token={token} />
         </div>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -680,7 +746,7 @@ export function AdminPage() {
                       {b.date === today ? (
                         <span className="font-semibold text-gold">Hoy</span>
                       ) : (
-                        b.date
+                        formatDMY(b.date)
                       )}
                     </td>
                     <td className="px-4 py-3.5 tabular-nums text-paper/80">
@@ -710,7 +776,16 @@ export function AdminPage() {
                     </td>
                     <td className="px-4 py-3.5 tabular-nums">${currency.format(b.priceArs)}</td>
                     <td className="px-4 py-3.5">
-                      <PaymentBadge value={b.paymentMethod} onClick={() => setEditingPayment(b)} />
+                      <div className="flex flex-col items-start gap-1">
+                        <PaymentBadge value={b.paymentMethod} onClick={() => setEditingPayment(b)} />
+                        {b.status === "confirmed" && (
+                          <PaidPill
+                            paid={b.paid}
+                            onClick={() => handleTogglePaid(b)}
+                            busy={togglingPaidId === b.id}
+                          />
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusPill status={b.status} />

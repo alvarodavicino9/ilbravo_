@@ -58,6 +58,7 @@ export interface BookingResult {
   customerPhone: string;
   status: string;
   paymentMethod: PaymentMethod | null;
+  paid?: boolean;
 }
 
 export interface AdminBooking {
@@ -74,6 +75,7 @@ export interface AdminBooking {
   createdAt: string;
   paymentMethod: PaymentMethod | null;
   notes: string | null;
+  paid: boolean;
 }
 
 export interface AdminCreateBookingInput {
@@ -84,6 +86,7 @@ export interface AdminCreateBookingInput {
   customerPhone: string;
   paymentMethod?: PaymentMethod | null;
   notes?: string | null;
+  paid?: boolean;
 }
 
 class ApiError extends Error {}
@@ -317,6 +320,7 @@ export const api = {
         created_at: string;
         payment_method: PaymentMethod | null;
         notes: string | null;
+        paid: boolean;
       }) => ({
         id: r.id,
         date: r.date,
@@ -331,6 +335,7 @@ export const api = {
         createdAt: r.created_at,
         paymentMethod: r.payment_method,
         notes: r.notes,
+        paid: r.paid,
       })
     );
   },
@@ -341,11 +346,11 @@ export const api = {
     return { ok: Boolean(data) };
   },
 
-  /** Marca o corrige el medio de pago (y opcionalmente las notas) de un turno ya cargado. */
+  /** Marca o corrige el medio de pago, las notas y/o si ya está cobrado, de un turno ya cargado. */
   adminUpdateBooking: async (
     token: string,
     id: string,
-    changes: { paymentMethod?: PaymentMethod | null; notes?: string | null }
+    changes: { paymentMethod?: PaymentMethod | null; notes?: string | null; paid?: boolean }
   ): Promise<{ ok: boolean }> => {
     const { data, error } = await supabase.rpc("admin_update_booking", {
       p_token: token,
@@ -353,6 +358,7 @@ export const api = {
       p_payment_method: changes.paymentMethod ?? null,
       p_notes: changes.notes ?? null,
       p_clear_payment_method: changes.paymentMethod === null,
+      p_paid: changes.paid === undefined ? null : changes.paid,
     });
     if (error) throw friendlyRpcError(error);
     return { ok: Boolean(data) };
@@ -370,6 +376,7 @@ export const api = {
         p_customer_phone: input.customerPhone,
         p_payment_method: input.paymentMethod ?? null,
         p_notes: input.notes ?? null,
+        p_paid: input.paid ?? false,
       })
       .single();
     if (error) throw friendlyRpcError(error);
@@ -386,6 +393,7 @@ export const api = {
       customer_phone: string;
       status: string;
       payment_method: PaymentMethod | null;
+      paid: boolean;
     };
 
     return {
@@ -400,6 +408,7 @@ export const api = {
       customerPhone: row.customer_phone,
       status: row.status,
       paymentMethod: row.payment_method,
+      paid: row.paid,
     };
   },
 

@@ -1,21 +1,14 @@
 import { motion } from "framer-motion";
 
 /**
- * Capa de fondo fija, compartida por toda la página: un par de manchas de
- * luz doradas que se desplazan muy lentamente + una grilla sutil. Le da
- * profundidad al fondo negro plano sin distraer del contenido.
+ * Capa de fondo fija, compartida por toda la página: manchas de luz
+ * doradas que se desplazan muy lentamente sobre el negro plano. Le da
+ * profundidad sin distraer del contenido (sin grilla: quedaba muy cargado
+ * sobre tablas y tarjetas de datos).
  */
 export function BackgroundFX() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-ink">
-      <div
-        className="absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, #fff 1px, transparent 1px), linear-gradient(to bottom, #fff 1px, transparent 1px)",
-          backgroundSize: "64px 64px",
-        }}
-      />
       <motion.div
         className="absolute -left-40 top-[-10%] h-[520px] w-[520px] rounded-full bg-gold/10 blur-[130px]"
         animate={{ x: [0, 60, 0], y: [0, 40, 0] }}

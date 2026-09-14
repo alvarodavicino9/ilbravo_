@@ -24,6 +24,7 @@ import {
 } from "../lib/api";
 import { Select } from "./ui/Select";
 import { Button } from "./ui/Button";
+import { addDaysIso, formatDMY, todayIso } from "../lib/date";
 
 const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((value) => ({
   value,
@@ -31,18 +32,6 @@ const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABELS) as PaymentMet
 }));
 
 const currency = new Intl.NumberFormat("es-AR");
-
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function addDaysIso(iso: string, days: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 function formatIsoHuman(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -436,7 +425,7 @@ export function BookingWizard({
                       <Loader2 className="h-4 w-4 animate-spin" /> Confirmando…
                     </>
                   ) : (
-                    `Confirmar turno · ${date} ${selectedTime}`
+                    `Confirmar turno · ${formatDMY(date)} ${selectedTime}`
                   )}
                 </Button>
               </motion.form>
