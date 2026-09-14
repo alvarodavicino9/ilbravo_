@@ -19,7 +19,29 @@
     <meta property="og:type" content="website" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Se ve mientras se descarga y arranca el JS (React lo reemplaza
+        apenas monta). Sin esto la pantalla queda totalmente negra y sin
+        ningún indicio de que algo está pasando, que es justo lo que
+        confunde en conexiones de celular lentas.
+      -->
+      <div
+        style="
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #08070a;
+          color: rgba(248, 247, 244, 0.45);
+          font-family: system-ui, sans-serif;
+          font-size: 0.85rem;
+          letter-spacing: 0.04em;
+        "
+      >
+        Cargando…
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
