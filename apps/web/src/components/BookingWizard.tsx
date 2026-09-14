@@ -369,11 +369,12 @@ export function BookingWizard({
           <AnimatePresence>
             {service && selectedTime && (
               <motion.form
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.25 }}
                 onSubmit={handleSubmit}
-                className="mt-6 space-y-4 overflow-hidden border-t border-white/10 pt-6"
+                className="mt-6 space-y-4 border-t border-white/10 pt-6"
               >
                 <div>
                   <label className="mb-1 flex items-center gap-1.5 text-sm text-paper/60">
