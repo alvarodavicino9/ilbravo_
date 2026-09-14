@@ -11,6 +11,7 @@ import {
   DollarSign,
   Eye,
   EyeOff,
+  History,
   Lock,
   LogOut,
   Phone,
@@ -439,12 +440,16 @@ export function AdminPage() {
   const [editingPayment, setEditingPayment] = useState<AdminBooking | null>(null);
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [togglingPaidId, setTogglingPaidId] = useState<string | null>(null);
+  const [includePast, setIncludePast] = useState(false);
 
-  async function load(currentToken: string) {
+  async function load(currentToken: string, opts?: { includePast?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      const rows = await api.adminListBookings(currentToken, { from: todayIso() });
+      const wantsPast = opts?.includePast ?? includePast;
+      // Sin "from" trae el historial completo, igual que el Excel exportado:
+      // así lo que se ve acá y lo que se exporta siempre coincide.
+      const rows = await api.adminListBookings(currentToken, wantsPast ? {} : { from: todayIso() });
       setBookings(rows);
       sessionStorage.setItem(TOKEN_KEY, currentToken);
       setToken(currentToken);
@@ -462,6 +467,12 @@ export function AdminPage() {
     if (token) load(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function handleToggleIncludePast() {
+    const next = !includePast;
+    setIncludePast(next);
+    load(token, { includePast: next });
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -690,18 +701,32 @@ export function AdminPage() {
             />
           </div>
 
-          <div className="panel flex w-fit gap-1 rounded-xl p-1">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setStatusFilter(f.value)}
-                className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  statusFilter === f.value ? "bg-gold text-ink" : "text-paper/60 hover:text-paper"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="panel flex w-fit gap-1 rounded-xl p-1">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setStatusFilter(f.value)}
+                  className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                    statusFilter === f.value ? "bg-gold text-ink" : "text-paper/60 hover:text-paper"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleToggleIncludePast}
+              title="Muestra también los turnos con fecha pasada (lo mismo que ves en el Excel exportado)"
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+                includePast
+                  ? "border-gold/40 bg-gold/10 text-gold"
+                  : "border-white/10 bg-white/[0.02] text-paper/50 hover:text-paper"
+              }`}
+            >
+              <History className="h-3.5 w-3.5" />
+              Historial
+            </button>
           </div>
         </div>
 
@@ -717,7 +742,11 @@ export function AdminPage() {
           <div className="panel mt-6 flex flex-col items-center gap-3 rounded-2xl px-6 py-16 text-center">
             <CalendarX className="h-8 w-8 text-paper/25" />
             <p className="text-paper/50">
-              {bookings.length === 0 ? "No hay turnos próximos." : "Ningún turno coincide con la búsqueda."}
+              {bookings.length === 0
+                ? includePast
+                  ? "No hay turnos cargados todavía."
+                  : "No hay turnos próximos. Tocá \"Historial\" para ver los turnos pasados."
+                : "Ningún turno coincide con la búsqueda."}
             </p>
           </div>
         )}
