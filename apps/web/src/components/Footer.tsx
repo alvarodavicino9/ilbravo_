@@ -1,6 +1,5 @@
 import { MapPin, MessageCircle, Phone } from "lucide-react";
 import { Logo } from "./Logo";
-import { BarberPole } from "./BarberPole";
 import { InstagramGlyph } from "./icons/InstagramGlyph";
 import type { BusinessInfo } from "../lib/api";
 
@@ -20,7 +19,6 @@ export function Footer({ business }: { business: BusinessInfo | null }) {
         <div className="col-span-2 flex flex-col items-start gap-4 sm:col-span-1">
           <Logo />
           <p className="max-w-xs text-sm text-paper/50">Oficio de barrio, en el corazón de Córdoba Capital.</p>
-          <BarberPole className="h-10 w-3.5" />
         </div>
 
         <div className="flex flex-col items-start gap-3">

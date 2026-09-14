@@ -4,7 +4,6 @@ import type { BusinessInfo } from "../lib/api";
 import { LinkButton } from "./ui/LinkButton";
 import { LogoWatermark } from "./LogoWatermark";
 import { Particles } from "./Particles";
-import { BarberPole } from "./BarberPole";
 
 const container: Variants = {
   hidden: {},
@@ -34,15 +33,6 @@ export function Hero({ business }: { business: BusinessInfo | null }) {
         />
         <LogoWatermark className="absolute -right-24 top-[-8%] h-[520px] w-[520px] md:-right-16 md:top-[-20%] md:h-[640px] md:w-[640px]" />
         <Particles count={18} />
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.9, ease: "easeOut" }}
-          className="absolute right-4 top-20 sm:right-[6%] sm:top-1/2 sm:-translate-y-1/2"
-        >
-          <BarberPole className="h-28 w-5 sm:h-72 sm:w-10 md:h-[26rem] md:w-14 lg:h-[30rem] lg:w-16" />
-        </motion.div>
       </div>
 
       <motion.div
@@ -52,7 +42,17 @@ export function Hero({ business }: { business: BusinessInfo | null }) {
         className="relative mx-auto flex max-w-6xl flex-col items-start gap-6 px-5 py-24 md:py-36"
       >
         <motion.div variants={item}>
-          <span className="rounded-full border border-gold/40 bg-gold/5 px-4 py-1 text-xs uppercase tracking-[0.2em] text-gold">
+          {/*
+            El rubro real que carga el negocio ("Peluquería, Barbería y
+            Cuidado Personal") es bastante más largo que el texto de
+            respaldo con el que se diseñó esta etiqueta — en el celular
+            no entra en una línea. Con rounded-full eso se veía roto (la
+            forma de píldora recortando dos líneas de texto); rounded-2xl
+            queda prolijo tanto en una línea como envuelto en dos, y el
+            tracking/tamaño más chico en mobile ayuda a que entre en una
+            sola línea la mayoría de las veces.
+          */}
+          <span className="inline-block max-w-[88vw] rounded-2xl border border-gold/40 bg-gold/5 px-4 py-1.5 text-center text-[10px] uppercase leading-relaxed tracking-[0.1em] text-gold sm:text-xs sm:tracking-[0.2em]">
             {business?.category ?? "Peluquería & Barbería"} · Córdoba
           </span>
         </motion.div>
