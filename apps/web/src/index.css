@@ -91,12 +91,17 @@ body {
   }
 }
 
-/* ---------- Glassmorphism card ---------- */
+/* ---------- Glassmorphism card ----------
+   El blur bajó de 20px/24px a 12px/14px: backdrop-filter es de las
+   propiedades más caras para la GPU (tiene que recalcular el desenfoque
+   de todo lo que cambia detrás), y acá hay varias tarjetas .glass visibles
+   a la vez en pantalla en un celular de gama media. Se sigue viendo a
+   vidrio esmerilado, pero cuesta bastante menos de renderizar. */
 .glass {
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
   border: 1px solid rgba(255, 255, 255, 0.09);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* ---------- Admin panel surface (dashboard, tables, toolbars) ----------
@@ -106,8 +111,8 @@ body {
 .panel {
   background: linear-gradient(165deg, rgba(23, 21, 26, 0.92), rgba(15, 14, 18, 0.88));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 /* ---------- Solid overlay panel (dropdowns, popovers, menus) ----------
@@ -116,8 +121,8 @@ body {
 .popover {
   background: linear-gradient(165deg, rgba(23, 21, 26, 0.99), rgba(11, 10, 13, 0.99));
   border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 /* Animated gradient ring that fades in on hover, used on premium cards */
@@ -193,11 +198,27 @@ body {
    (45px — chosen so that, projected onto the gradient's own 126.87deg
    axis, it equals exactly one 27px color cycle) and repeat only on
    that axis (`repeat-y`; width stays 100% so there's never more than
-   one column). Animating only `background-position-y` by that same
-   45px is then an exact loop: verified pixel-for-pixel identical
-   (mean/max diff 0) between the 0px and 45px frames. This also matches
-   how a real pole reads — stripes travelling straight down. */
+   one column). This also matches how a real pole reads — stripes
+   travelling straight down.
+
+   Performance: this used to animate `background-position`, which forces
+   the browser to *repaint* the element on every single frame of a fast
+   1.1s loop, forever, on every page that shows it (the pole sits right
+   in the Hero, the very first thing visible on load) — real, continuous
+   work competing with the JS that's still downloading/parsing on a
+   phone. Animating `transform: translateY()` instead is compositor-only
+   (no repaint, just moves an already-painted layer), so we extend the
+   element one cycle above its box (`top: -45px`) and slide it down by
+   that same 45px — since the pattern repeats seamlessly, sliding the
+   whole painted layer looks identical to shifting the background inside
+   a fixed box (verified pixel-for-pixel identical, mean/max diff 0,
+   between the 0px and 45px frames), just far cheaper to render. */
 .barber-pole {
+  position: absolute;
+  top: -45px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-image: repeating-linear-gradient(
     126.87deg,
     var(--pole-red) 0px,
@@ -210,13 +231,32 @@ body {
   background-size: 100% 45px;
   background-repeat: repeat-y;
   animation: barber-spin 1.1s linear infinite;
+  will-change: transform;
 }
 @keyframes barber-spin {
   from {
-    background-position: 0 0;
+    transform: translate3d(0, 0, 0);
   }
   to {
-    background-position: 0 45px;
+    transform: translate3d(0, 45px, 0);
+  }
+}
+
+/* ---------- Ambient background glow blobs (BackgroundFX) ----------
+   CSS puro (no framer-motion): se anima sola, sin costo de JS por cuadro,
+   y en `transform` (no left/top) para que quede en la capa del compositor
+   y no dispare reflow/repaint del resto de la página en cada frame. */
+.bg-blob {
+  animation: bg-blob-drift 26s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes bg-blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(50px, 35px, 0);
   }
 }
 
@@ -261,4 +301,18 @@ body {
 /* ---------- Count-up stat number tick ---------- */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Quien tiene activado "reducir movimiento" en el sistema operativo suele
+   ser justamente quien menos margen tiene (equipos viejos/de gama baja,
+   batería), así que además de accesibilidad esto es una válvula de
+   rendimiento: frena todas las animaciones ambiente en loop infinito. */
+@media (prefers-reduced-motion: reduce) {
+  .bg-blob,
+  .barber-pole,
+  .particle,
+  .animate-spin-slow,
+  .animate-pulse-ring {
+    animation: none !important;
+  }
 }

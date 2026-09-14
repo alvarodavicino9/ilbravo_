@@ -39,6 +39,11 @@ function formatIsoHuman(iso: string): string {
   return date.toLocaleDateString("es-AR", { weekday: "long", day: "2-digit", month: "long" });
 }
 
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
 function chipLabel(iso: string, index: number): { top: string; bottom: string } {
   const [y, m, d] = iso.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -140,8 +145,15 @@ export function BookingWizard({
     }
     let cancelled = false;
     setLoadingSlots(true);
+    // Si ya tenemos los horarios del negocio y la duración del servicio
+    // (llegan como props, ya cargados por HomePage), se los pasamos para
+    // que no vuelva a pedirlos: uno menos de ida y vuelta a Supabase cada
+    // vez que se cambia el día o el servicio.
+    const known = business
+      ? { hours: business.hours.find((h) => h.day === weekdayOf(date))?.hours ?? null, durationMinutes: service.durationMinutes }
+      : null;
     api
-      .getAvailability(date, service.id)
+      .getAvailability(date, service.id, known)
       .then((res) => {
         if (!cancelled) setAvailability(res);
       })
@@ -175,7 +187,10 @@ export function BookingWizard({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No pudimos confirmar el turno, probá de nuevo.");
       if (service) {
-        api.getAvailability(date, service.id).then(setAvailability).catch(() => {});
+        const known = business
+          ? { hours: business.hours.find((h) => h.day === weekdayOf(date))?.hours ?? null, durationMinutes: service.durationMinutes }
+          : null;
+        api.getAvailability(date, service.id, known).then(setAvailability).catch(() => {});
       }
       setSelectedTime(null);
     } finally {

@@ -28,10 +28,26 @@
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      El link de la fuente todavía bloquea el primer render mientras se
+      descarga (aunque sea rápido gracias al preconnect de arriba). El
+      truco media="print" + onload hace que el navegador lo baje con
+      prioridad baja, sin bloquear, y recién lo aplique como "all" cuando
+      terminó — el texto se ve al toque con una fuente del sistema y
+      cambia a Bebas Neue/Inter apenas está lista, en vez de esperarla.
+    -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap"
+      />
+    </noscript>
 
     <!-- Arranca antes la conexión con Supabase, así la primera consulta
          (servicios, horarios) no pierde tiempo en el handshake TLS. -->

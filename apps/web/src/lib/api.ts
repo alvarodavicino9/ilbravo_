@@ -200,29 +200,52 @@ export const api = {
     }));
   },
 
-  getAvailability: async (date: string, serviceId: string): Promise<AvailabilityResponse> => {
-    const [{ data: hourRow, error: hourErr }, { data: service, error: serviceErr }] = await Promise.all([
-      supabase
-        .from("business_hours")
-        .select("open_time, close_time")
-        .eq("weekday", parseDateLocal(date).getDay())
-        .maybeSingle(),
-      supabase
-        .from("services")
-        .select("duration_minutes")
-        .eq("id", serviceId)
-        .eq("active", true)
-        .maybeSingle(),
-    ]);
-    if (hourErr) throw new ApiError(hourErr.message);
-    if (serviceErr) throw new ApiError(serviceErr.message);
+  /**
+   * `known`: cuando quien llama ya tiene los horarios del negocio y la
+   * duración del servicio a mano (HomePage/BookingWizard los cargan una
+   * sola vez al entrar), se los pasamos para no volver a pedirlos acá —
+   * son los mismos datos, y repetir esas dos consultas en cada cambio de
+   * día/servicio agregaba un viaje de ida y vuelta entero a Supabase de
+   * más, justo en el momento en que el celular ya está esperando el resto
+   * de la página. Sin `known` (por ejemplo, si se llama desde otro lado
+   * sin esa info a mano) se comporta igual que antes.
+   */
+  getAvailability: async (
+    date: string,
+    serviceId: string,
+    known?: { hours: { open: string; close: string } | null; durationMinutes: number } | null
+  ): Promise<AvailabilityResponse> => {
+    let dayHours: { open: string; close: string } | null;
+    let durationMinutes: number | null;
 
-    const dayHours =
-      hourRow?.open_time && hourRow?.close_time
-        ? { open: hhmmss(hourRow.open_time), close: hhmmss(hourRow.close_time) }
-        : null;
+    if (known) {
+      dayHours = known.hours;
+      durationMinutes = known.durationMinutes;
+    } else {
+      const [{ data: hourRow, error: hourErr }, { data: service, error: serviceErr }] = await Promise.all([
+        supabase
+          .from("business_hours")
+          .select("open_time, close_time")
+          .eq("weekday", parseDateLocal(date).getDay())
+          .maybeSingle(),
+        supabase
+          .from("services")
+          .select("duration_minutes")
+          .eq("id", serviceId)
+          .eq("active", true)
+          .maybeSingle(),
+      ]);
+      if (hourErr) throw new ApiError(hourErr.message);
+      if (serviceErr) throw new ApiError(serviceErr.message);
 
-    if (!dayHours || !service) {
+      dayHours =
+        hourRow?.open_time && hourRow?.close_time
+          ? { open: hhmmss(hourRow.open_time), close: hhmmss(hourRow.close_time) }
+          : null;
+      durationMinutes = service?.duration_minutes ?? null;
+    }
+
+    if (!dayHours || durationMinutes == null) {
       return { date, open: Boolean(dayHours), hours: dayHours, slots: [] };
     }
 
@@ -238,7 +261,7 @@ export const api = {
 
     const openMin = toMinutes(dayHours.open);
     const closeMin = toMinutes(dayHours.close);
-    const duration = service.duration_minutes;
+    const duration = durationMinutes;
 
     const slots: string[] = [];
     for (let start = openMin; start + duration <= closeMin; start += SLOT_STEP_MINUTES) {

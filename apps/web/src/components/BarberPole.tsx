@@ -11,7 +11,7 @@ export function BarberPole({ className = "" }: { className?: string }) {
       <div className="absolute -bottom-3 left-1/2 h-4 w-[70%] -translate-x-1/2 rounded-full bg-black/50 blur-md" />
 
       <div className="relative isolate h-full w-full overflow-hidden rounded-full shadow-[0_18px_40px_-12px_rgba(0,0,0,0.75)] ring-1 ring-white/15">
-        <div className="barber-pole absolute inset-0" />
+        <div className="barber-pole" />
 
         {/* brillo de vidrio: una franja clara que sugiere curvatura cilíndrica */}
         <div className="pointer-events-none absolute inset-y-0 left-[16%] w-[18%] rounded-full bg-gradient-to-r from-white/50 via-white/10 to-transparent blur-[1.5px]" />
