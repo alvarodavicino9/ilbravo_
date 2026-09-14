@@ -16,7 +16,7 @@ export function StatCard({ icon, label, value, hint, delay = 0 }: StatCardProps)
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay }}
-      className="glass glow-ring rounded-2xl p-5"
+      className="panel glow-ring rounded-2xl p-5"
     >
       <div className="flex items-center gap-2.5 text-paper/50">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/10 text-gold">

@@ -97,6 +97,17 @@ body {
   -webkit-backdrop-filter: blur(20px);
 }
 
+/* ---------- Admin panel surface (dashboard, tables, toolbars) ----------
+   More opaque than .glass on purpose: dense content (data tables, stat
+   grids) reads as cluttered when the ambient background grid bleeds
+   through too much. Same family/blur as .glass, just less see-through. */
+.panel {
+  background: linear-gradient(165deg, rgba(23, 21, 26, 0.92), rgba(15, 14, 18, 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
 /* ---------- Solid overlay panel (dropdowns, popovers, menus) ----------
    Unlike .glass, this needs to fully hide whatever sits behind it —
    used for floating panels that open on top of live page content. */

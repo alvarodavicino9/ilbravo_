@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
   CalendarDays,
+  CalendarPlus,
   CalendarX,
   Download,
   DollarSign,
@@ -11,15 +12,25 @@ import {
   Lock,
   LogOut,
   Phone,
-  RefreshCw,
   Scissors,
   Search,
+  StickyNote,
   TrendingUp,
+  Wallet,
+  X,
 } from "lucide-react";
-import { api, ApiError, type AdminBooking } from "../lib/api";
+import {
+  api,
+  ApiError,
+  PAYMENT_METHOD_LABELS,
+  type AdminBooking,
+  type PaymentMethod,
+  type Service,
+} from "../lib/api";
 import { Logo } from "../components/Logo";
 import { BackgroundFX } from "../components/BackgroundFX";
 import { Button } from "../components/ui/Button";
+import { Select } from "../components/ui/Select";
 import { StatCard } from "../components/admin/StatCard";
 import { StatusPill } from "../components/admin/StatusPill";
 
@@ -52,17 +63,338 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "cancelled", label: "Cancelados" },
 ];
 
+const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((value) => ({
+  value,
+  label: PAYMENT_METHOD_LABELS[value],
+}));
+
+/** Insignia compacta para mostrar el medio de pago en la tabla. */
+function PaymentBadge({
+  value,
+  onClick,
+}: {
+  value: PaymentMethod | null;
+  onClick: () => void;
+}) {
+  if (!value) {
+    return (
+      <button
+        onClick={onClick}
+        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-white/15 px-2.5 py-1 text-xs text-paper/40 transition-colors hover:border-gold/50 hover:text-gold"
+      >
+        <Wallet className="h-3 w-3" />
+        Marcar
+      </button>
+    );
+  }
+  return (
+    <button
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-full bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold transition-colors hover:bg-gold/20"
+    >
+      <Wallet className="h-3 w-3" />
+      {PAYMENT_METHOD_LABELS[value]}
+    </button>
+  );
+}
+
+/** Modal para editar el medio de pago (y notas) de un turno existente. */
+function PaymentEditModal({
+  booking,
+  onClose,
+  onSaved,
+}: {
+  booking: AdminBooking;
+  onClose: () => void;
+  onSaved: (id: string, changes: { paymentMethod: PaymentMethod | null; notes: string | null }) => void;
+}) {
+  const [value, setValue] = useState<PaymentMethod | "">(booking.paymentMethod ?? "");
+  const [notes, setNotes] = useState(booking.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.adminUpdateBooking(sessionStorage.getItem(TOKEN_KEY) || "", booking.id, {
+        paymentMethod: value || null,
+        notes: notes.trim() || null,
+      });
+      onSaved(booking.id, { paymentMethod: value || null, notes: notes.trim() || null });
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose} title="Medio de pago" icon={<Wallet className="h-4 w-4" />}>
+      <p className="text-sm text-paper/60">
+        {booking.customerName} · {booking.serviceName} · {booking.date} {booking.startTime}
+      </p>
+
+      <div className="mt-5">
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+          Medio de pago
+        </label>
+        <Select
+          value={value}
+          onChange={(v) => setValue(v as PaymentMethod)}
+          options={PAYMENT_METHOD_OPTIONS}
+          placeholder="Sin definir"
+        />
+      </div>
+
+      <div className="mt-4">
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+          Notas (opcional)
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          placeholder="Ej: pidió descuento, cliente frecuente, etc."
+          className="w-full resize-none rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold"
+        />
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-400/20 bg-red-400/5 px-3.5 py-3 text-sm text-red-400">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-2.5">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando…" : "Guardar"}
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/** Modal para cargar un turno manual (llamada telefónica, cliente que se presenta en el local). */
+function NewBookingModal({
+  services,
+  onClose,
+  onCreated,
+}: {
+  services: Service[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [serviceId, setServiceId] = useState("");
+  const [date, setDate] = useState(todayIso());
+  const [time, setTime] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const serviceOptions = services.map((s) => ({
+    value: s.id,
+    label: s.name,
+    sublabel: `$${currency.format(s.priceArs)} · ${s.durationMinutes} min`,
+  }));
+
+  async function handleSave() {
+    if (!serviceId || !date || !time || !name.trim() || !phone.trim()) {
+      setError("Completá servicio, fecha, hora, nombre y teléfono.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.adminCreateBooking(sessionStorage.getItem(TOKEN_KEY) || "", {
+        serviceId,
+        date,
+        startTime: time,
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        paymentMethod: paymentMethod || null,
+        notes: notes.trim() || null,
+      });
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo cargar el turno");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <ModalShell onClose={onClose} title="Nuevo turno" icon={<CalendarPlus className="h-4 w-4" />}>
+      <p className="text-sm text-paper/60">Para llamadas telefónicas o clientes que se presentan en el local.</p>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Servicio
+          </label>
+          <Select
+            value={serviceId}
+            onChange={setServiceId}
+            options={serviceOptions}
+            placeholder="Elegí un servicio"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Fecha
+          </label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold [color-scheme:dark]"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Hora
+          </label>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="w-full rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold [color-scheme:dark]"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Nombre y apellido
+          </label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Cliente"
+            className="w-full rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Teléfono
+          </label>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="351 123 4567"
+            className="w-full rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Medio de pago (opcional)
+          </label>
+          <Select
+            value={paymentMethod}
+            onChange={(v) => setPaymentMethod(v as PaymentMethod)}
+            options={PAYMENT_METHOD_OPTIONS}
+            placeholder="Sin definir"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-paper/50">
+            Notas (opcional)
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            className="w-full resize-none rounded-xl border border-white/15 bg-ink/70 px-4 py-3 text-sm text-paper outline-none transition-colors focus:border-gold"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-400/20 bg-red-400/5 px-3.5 py-3 text-sm text-red-400">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="mt-6 flex justify-end gap-2.5">
+        <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? "Cargando…" : "Cargar turno"}
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({
+  title,
+  icon,
+  onClose,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm px-4 py-8"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 340, damping: 28 }}
+        onClick={(e) => e.stopPropagation()}
+        className="panel glow-ring max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl p-6"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-paper">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold/10 text-gold">
+              {icon}
+            </span>
+            <h2 className="font-display text-xl tracking-wide">{title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-paper/40 transition-colors hover:bg-white/[0.06] hover:text-paper"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-5">{children}</div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export function AdminPage() {
   const [token, setToken] = useState<string>(() => sessionStorage.getItem(TOKEN_KEY) || "");
   const [tokenInput, setTokenInput] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [editingPayment, setEditingPayment] = useState<AdminBooking | null>(null);
+  const [showNewBooking, setShowNewBooking] = useState(false);
 
   async function load(currentToken: string) {
     setLoading(true);
@@ -87,6 +419,11 @@ export function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    api.getServices().then(setServices).catch(() => {});
+  }, [token]);
+
   async function handleCancel(id: string) {
     if (!confirm("¿Cancelar este turno?")) return;
     await api.adminCancelBooking(token, id);
@@ -103,25 +440,14 @@ export function AdminPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function handleSync() {
-    setSyncMsg("Sincronizando…");
-    try {
-      const res = await api.adminSyncSheet(token);
-      setSyncMsg(
-        res.synced
-          ? `Google Sheets actualizado (${res.rows} turnos).`
-          : "Google Sheets no está configurado todavía (ver README)."
-      );
-    } catch {
-      setSyncMsg("Error al sincronizar.");
-    }
-  }
-
   function handleLogout() {
     sessionStorage.removeItem(TOKEN_KEY);
     setToken("");
     setBookings([]);
-    setSyncMsg(null);
+  }
+
+  function applyPaymentUpdate(id: string, changes: { paymentMethod: PaymentMethod | null; notes: string | null }) {
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...changes } : b)));
   }
 
   const today = todayIso();
@@ -179,7 +505,7 @@ export function AdminPage() {
             setSubmitting(true);
             load(tokenInput.trim());
           }}
-          className="glass glow-ring relative w-full max-w-sm overflow-hidden rounded-2xl p-8"
+          className="panel glow-ring relative w-full max-w-sm overflow-hidden rounded-2xl p-8"
         >
           <div className="barber-pole absolute inset-x-0 top-0 h-1.5" />
 
@@ -243,13 +569,13 @@ export function AdminPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5">
+            <Button size="sm" onClick={() => setShowNewBooking(true)}>
+              <CalendarPlus className="h-3.5 w-3.5" />
+              Nuevo turno
+            </Button>
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" />
               Exportar Excel
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleSync}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              Sincronizar
             </Button>
             <Button variant="danger" size="sm" onClick={handleLogout}>
               <LogOut className="h-3.5 w-3.5" />
@@ -257,12 +583,6 @@ export function AdminPage() {
             </Button>
           </div>
         </div>
-
-        {syncMsg && (
-          <p className="mt-4 rounded-xl border border-gold/20 bg-gold/5 px-4 py-2.5 text-sm text-gold">
-            {syncMsg}
-          </p>
-        )}
 
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
@@ -304,7 +624,7 @@ export function AdminPage() {
             />
           </div>
 
-          <div className="glass flex w-fit gap-1 rounded-xl p-1">
+          <div className="panel flex w-fit gap-1 rounded-xl p-1">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.value}
@@ -322,13 +642,13 @@ export function AdminPage() {
         {loading && (
           <div className="mt-6 space-y-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="glass h-14 animate-pulse rounded-xl" />
+              <div key={i} className="panel h-14 animate-pulse rounded-xl" />
             ))}
           </div>
         )}
 
         {!loading && filtered.length === 0 && (
-          <div className="glass mt-6 flex flex-col items-center gap-3 rounded-2xl px-6 py-16 text-center">
+          <div className="panel mt-6 flex flex-col items-center gap-3 rounded-2xl px-6 py-16 text-center">
             <CalendarX className="h-8 w-8 text-paper/25" />
             <p className="text-paper/50">
               {bookings.length === 0 ? "No hay turnos próximos." : "Ningún turno coincide con la búsqueda."}
@@ -337,8 +657,8 @@ export function AdminPage() {
         )}
 
         {!loading && filtered.length > 0 && (
-          <div className="glass mt-6 overflow-x-auto rounded-2xl">
-            <table className="w-full min-w-[860px] text-left text-sm">
+          <div className="panel mt-6 overflow-x-auto rounded-2xl">
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="border-b border-white/10 text-[11px] font-semibold uppercase tracking-wide text-paper/40">
                 <tr>
                   <th className="px-4 py-3.5">Fecha</th>
@@ -347,6 +667,7 @@ export function AdminPage() {
                   <th className="px-4 py-3.5">Cliente</th>
                   <th className="px-4 py-3.5">Teléfono</th>
                   <th className="px-4 py-3.5">Precio</th>
+                  <th className="px-4 py-3.5">Pago</th>
                   <th className="px-4 py-3.5">Estado</th>
                   <th className="px-4 py-3.5">Origen</th>
                   <th className="px-4 py-3.5" />
@@ -366,7 +687,16 @@ export function AdminPage() {
                       {b.startTime}–{b.endTime}
                     </td>
                     <td className="px-4 py-3.5">{b.serviceName}</td>
-                    <td className="px-4 py-3.5 font-medium">{b.customerName}</td>
+                    <td className="px-4 py-3.5 font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        {b.customerName}
+                        {b.notes && (
+                          <span title={b.notes}>
+                            <StickyNote className="h-3.5 w-3.5 shrink-0 text-gold/70" />
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-4 py-3.5">
                       <a
                         href={`https://wa.me/${b.customerPhone.replace(/\D/g, "")}`}
@@ -379,6 +709,9 @@ export function AdminPage() {
                       </a>
                     </td>
                     <td className="px-4 py-3.5 tabular-nums">${currency.format(b.priceArs)}</td>
+                    <td className="px-4 py-3.5">
+                      <PaymentBadge value={b.paymentMethod} onClick={() => setEditingPayment(b)} />
+                    </td>
                     <td className="px-4 py-3.5">
                       <StatusPill status={b.status} />
                     </td>
@@ -400,6 +733,23 @@ export function AdminPage() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {editingPayment && (
+          <PaymentEditModal
+            booking={editingPayment}
+            onClose={() => setEditingPayment(null)}
+            onSaved={applyPaymentUpdate}
+          />
+        )}
+        {showNewBooking && (
+          <NewBookingModal
+            services={services}
+            onClose={() => setShowNewBooking(false)}
+            onCreated={() => load(token)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

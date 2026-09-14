@@ -10,10 +10,25 @@ import {
   Phone,
   Scissors,
   User,
+  Wallet,
 } from "lucide-react";
-import { api, ApiError, type AvailabilityResponse, type BookingResult, type BusinessInfo, type Service } from "../lib/api";
+import {
+  api,
+  ApiError,
+  PAYMENT_METHOD_LABELS,
+  type AvailabilityResponse,
+  type BookingResult,
+  type BusinessInfo,
+  type PaymentMethod,
+  type Service,
+} from "../lib/api";
 import { Select } from "./ui/Select";
 import { Button } from "./ui/Button";
+
+const PAYMENT_METHOD_OPTIONS = (Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((value) => ({
+  value,
+  label: PAYMENT_METHOD_LABELS[value],
+}));
 
 const currency = new Intl.NumberFormat("es-AR");
 
@@ -102,6 +117,7 @@ export function BookingWizard({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<BookingResult | null>(null);
@@ -163,6 +179,7 @@ export function BookingWizard({
         startTime: selectedTime,
         customerName: name,
         customerPhone: phone,
+        paymentMethod: paymentMethod || null,
         source: "web",
       });
       setConfirmed(result);
@@ -207,6 +224,7 @@ export function BookingWizard({
             setConfirmed(null);
             setName("");
             setPhone("");
+            setPaymentMethod("");
           }}
         >
           Reservar otro turno
@@ -397,6 +415,17 @@ export function BookingWizard({
                       placeholder="351 123 4567"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 flex items-center gap-1.5 text-sm text-paper/60">
+                    <Wallet className="h-3.5 w-3.5" /> Medio de pago (opcional)
+                  </label>
+                  <Select
+                    value={paymentMethod}
+                    onChange={(v) => setPaymentMethod(v as PaymentMethod)}
+                    options={PAYMENT_METHOD_OPTIONS}
+                    placeholder="Elegís al llegar"
+                  />
                 </div>
 
                 {error && <p className="text-sm text-red-400">{error}</p>}

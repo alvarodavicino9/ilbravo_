@@ -34,6 +34,8 @@ export interface AvailabilityResponse {
   slots: string[];
 }
 
+export type PaymentMethod = "efectivo" | "transferencia" | "tarjeta" | "mercado_pago";
+
 export interface CreateBookingInput {
   serviceId: string;
   date: string;
@@ -41,6 +43,7 @@ export interface CreateBookingInput {
   customerName: string;
   customerPhone: string;
   source: "web";
+  paymentMethod?: PaymentMethod | null;
 }
 
 export interface BookingResult {
@@ -54,6 +57,7 @@ export interface BookingResult {
   customerName: string;
   customerPhone: string;
   status: string;
+  paymentMethod: PaymentMethod | null;
 }
 
 export interface AdminBooking {
@@ -68,6 +72,18 @@ export interface AdminBooking {
   status: "confirmed" | "cancelled";
   source: string;
   createdAt: string;
+  paymentMethod: PaymentMethod | null;
+  notes: string | null;
+}
+
+export interface AdminCreateBookingInput {
+  serviceId: string;
+  date: string;
+  startTime: string;
+  customerName: string;
+  customerPhone: string;
+  paymentMethod?: PaymentMethod | null;
+  notes?: string | null;
 }
 
 class ApiError extends Error {}
@@ -83,7 +99,15 @@ const RPC_ERROR_MESSAGES: Record<string, string> = {
   SLOT_TAKEN: "Ese horario ya no está disponible, elegí otro",
   INVALID_NAME: "El nombre ingresado no es válido",
   INVALID_PHONE: "El teléfono ingresado no es válido",
+  INVALID_PAYMENT_METHOD: "Medio de pago no válido",
   UNAUTHORIZED: "No autorizado",
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  efectivo: "Efectivo",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  mercado_pago: "Mercado Pago",
 };
 
 function friendlyRpcError(err: { message?: string } | null): ApiError {
@@ -236,6 +260,7 @@ export const api = {
         p_customer_phone: input.customerPhone,
         p_source: input.source,
         p_notes: null,
+        p_payment_method: input.paymentMethod ?? null,
       })
       .single();
     if (error) throw friendlyRpcError(error);
@@ -251,6 +276,7 @@ export const api = {
       customer_name: string;
       customer_phone: string;
       status: string;
+      payment_method: PaymentMethod | null;
     };
 
     return {
@@ -264,6 +290,7 @@ export const api = {
       customerName: row.customer_name,
       customerPhone: row.customer_phone,
       status: row.status,
+      paymentMethod: row.payment_method,
     };
   },
 
@@ -288,6 +315,8 @@ export const api = {
         status: "confirmed" | "cancelled";
         source: string;
         created_at: string;
+        payment_method: PaymentMethod | null;
+        notes: string | null;
       }) => ({
         id: r.id,
         date: r.date,
@@ -300,6 +329,8 @@ export const api = {
         status: r.status,
         source: r.source,
         createdAt: r.created_at,
+        paymentMethod: r.payment_method,
+        notes: r.notes,
       })
     );
   },
@@ -308,6 +339,68 @@ export const api = {
     const { data, error } = await supabase.rpc("admin_cancel_booking", { p_token: token, p_id: id });
     if (error) throw friendlyRpcError(error);
     return { ok: Boolean(data) };
+  },
+
+  /** Marca o corrige el medio de pago (y opcionalmente las notas) de un turno ya cargado. */
+  adminUpdateBooking: async (
+    token: string,
+    id: string,
+    changes: { paymentMethod?: PaymentMethod | null; notes?: string | null }
+  ): Promise<{ ok: boolean }> => {
+    const { data, error } = await supabase.rpc("admin_update_booking", {
+      p_token: token,
+      p_id: id,
+      p_payment_method: changes.paymentMethod ?? null,
+      p_notes: changes.notes ?? null,
+      p_clear_payment_method: changes.paymentMethod === null,
+    });
+    if (error) throw friendlyRpcError(error);
+    return { ok: Boolean(data) };
+  },
+
+  /** Carga un turno manual (llamada telefónica, cliente que se presenta en el local, etc). */
+  adminCreateBooking: async (token: string, input: AdminCreateBookingInput): Promise<BookingResult> => {
+    const { data, error } = await supabase
+      .rpc("admin_create_booking", {
+        p_token: token,
+        p_service_id: input.serviceId,
+        p_date: input.date,
+        p_start_time: input.startTime,
+        p_customer_name: input.customerName,
+        p_customer_phone: input.customerPhone,
+        p_payment_method: input.paymentMethod ?? null,
+        p_notes: input.notes ?? null,
+      })
+      .single();
+    if (error) throw friendlyRpcError(error);
+
+    const row = data as {
+      id: string;
+      service_id: string;
+      service_name: string;
+      price_ars: number;
+      date: string;
+      start_time: string;
+      end_time: string;
+      customer_name: string;
+      customer_phone: string;
+      status: string;
+      payment_method: PaymentMethod | null;
+    };
+
+    return {
+      id: row.id,
+      serviceId: row.service_id,
+      serviceName: row.service_name,
+      priceArs: row.price_ars,
+      date: row.date,
+      startTime: hhmmss(row.start_time),
+      endTime: hhmmss(row.end_time),
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone,
+      status: row.status,
+      paymentMethod: row.payment_method,
+    };
   },
 
   adminExportExcel: async (token: string): Promise<Blob> => {
@@ -327,6 +420,8 @@ export const api = {
       { header: "Cliente", key: "customerName", width: 24 },
       { header: "Teléfono", key: "customerPhone", width: 16 },
       { header: "Estado", key: "status", width: 14 },
+      { header: "Medio de pago", key: "paymentMethod", width: 16 },
+      { header: "Notas", key: "notes", width: 28 },
       { header: "Origen", key: "source", width: 12 },
       { header: "Creado", key: "createdAt", width: 20 },
     ];
@@ -334,22 +429,19 @@ export const api = {
     sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
 
     for (const r of rows) {
-      sheet.addRow({ ...r, status: r.status === "cancelled" ? "Cancelado" : "Confirmado" });
+      sheet.addRow({
+        ...r,
+        status: r.status === "cancelled" ? "Cancelado" : "Confirmado",
+        paymentMethod: r.paymentMethod ? PAYMENT_METHOD_LABELS[r.paymentMethod] : "",
+        notes: r.notes ?? "",
+      });
     }
-    sheet.autoFilter = { from: "A1", to: "J1" };
+    sheet.autoFilter = { from: "A1", to: "L1" };
 
     const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-  },
-
-  // TODO: la sincronización con Google Sheets todavía no se portó a
-  // Supabase (queda pendiente, ver conversación con el cliente sobre el
-  // bot de WhatsApp). Por ahora el botón del panel avisa que no está
-  // configurada, igual que antes cuando faltaba la config en el server.
-  adminSyncSheet: async (_token: string): Promise<{ synced: boolean; rows?: number }> => {
-    return { synced: false };
   },
 };
 
