@@ -59,15 +59,31 @@ export function LocationHours({ business }: { business: BusinessInfo | null }) {
           </h2>
           <p className="mt-6 text-paper/70">{business.address}</p>
 
-          <div className="mt-5 overflow-hidden rounded-xl border border-white/10 grayscale-[0.3] transition hover:grayscale-0">
+          <a
+            href={business.mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Abrir ubicación en Google Maps"
+            className="relative mt-5 block overflow-hidden rounded-xl border border-white/10 grayscale-[0.3] transition hover:grayscale-0"
+          >
+            {/*
+              El mapa embebido (formato /maps?q=...&output=embed, sin API key)
+              trae su propia UI interna de Google con links que no controlamos
+              — al tocarlos en el celular a veces intentan abrir la app de Maps
+              y, si algo en ese camino falla, terminan en un 404. Por eso el
+              iframe queda puramente visual (pointer-events-none) y todo el
+              recuadro es en realidad este link, que va directo a la URL de
+              Maps que ya verificamos que funciona siempre.
+            */}
             <iframe
               title="Ubicación de IL BRAVO en el mapa"
               src={`https://www.google.com/maps?q=${encodeURIComponent(business.address)}&output=embed`}
-              className="h-48 w-full border-0 sm:h-56"
+              className="pointer-events-none h-48 w-full border-0 sm:h-56"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
+              tabIndex={-1}
             />
-          </div>
+          </a>
 
           <LinkButton href={business.mapsUrl} target="_blank" rel="noreferrer" variant="outline" size="sm" className="mt-4">
             Ver en Google Maps <span aria-hidden>→</span>

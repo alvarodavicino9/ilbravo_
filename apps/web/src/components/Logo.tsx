@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import logoPaper from "../assets/logo-paper.png";
+import logoPaper from "../assets/logo-paper.webp";
 
 interface LogoProps {
   className?: string;

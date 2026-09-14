@@ -17,6 +17,25 @@
       content="Reservá tu turno online en segundos. Zona Centro, Córdoba."
     />
     <meta property="og:type" content="website" />
+
+    <!--
+      Fuentes: antes se cargaban con @import dentro del CSS, lo que obliga
+      al navegador a esperar a descargar y parsear el CSS entero antes de
+      darse cuenta de que necesita ir a buscar las fuentes — un viaje de
+      ida y vuelta extra, en serie. Con preconnect + link acá arriba, el
+      navegador arranca la conexión y la descarga en paralelo con todo lo
+      demás, apenas lee el HTML.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap"
+    />
+
+    <!-- Arranca antes la conexión con Supabase, así la primera consulta
+         (servicios, horarios) no pierde tiempo en el handshake TLS. -->
+    <link rel="preconnect" href="https://sckhnrbvbzeajrwkckza.supabase.co" crossorigin />
   </head>
   <body>
     <div id="root">

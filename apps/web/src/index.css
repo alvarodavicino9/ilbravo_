@@ -1,4 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap");
+/* Las fuentes se cargan desde index.html (preconnect + link), no acá:
+   un @import de CSS obliga a esperar a que se descargue este archivo
+   entero antes de ir a buscar la fuente, un viaje de más en serie. */
 @import "tailwindcss";
 
 @theme {

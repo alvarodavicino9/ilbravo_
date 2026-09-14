@@ -1,4 +1,4 @@
-import logoGold from "../assets/logo-gold.png";
+import logoGold from "../assets/logo-gold.webp";
 
 /**
  * Marca de agua decorativa: el isotipo gigante girando muy lentamente de

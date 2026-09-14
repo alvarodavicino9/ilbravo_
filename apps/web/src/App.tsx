@@ -1,5 +1,4 @@
 import { Suspense, lazy } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { HomePage } from "./pages/HomePage";
 
 // El panel de admin se carga aparte (lazy): así los clientes que solo
@@ -16,22 +15,21 @@ function AdminFallback() {
   );
 }
 
+// Solo hay dos rutas estáticas (home y admin), así que un router completo
+// (react-router-dom) es peso de más para descargar y parsear sin necesidad:
+// alcanza con mirar el pathname una vez al cargar.
 function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/admin"
-          element={
-            <Suspense fallback={<AdminFallback />}>
-              <AdminPage />
-            </Suspense>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
-  );
+  const isAdmin = window.location.pathname.replace(/\/+$/, "") === "/admin";
+
+  if (isAdmin) {
+    return (
+      <Suspense fallback={<AdminFallback />}>
+        <AdminPage />
+      </Suspense>
+    );
+  }
+
+  return <HomePage />;
 }
 
 export default App;
